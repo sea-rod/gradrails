@@ -7,25 +7,32 @@ from transformers import (
     DataCollatorWithPadding,
     Trainer,
     TrainingArguments,
+    data,
 )
 
 MODEL_NAME = "sentence-transformers/all-MiniLM-L6-v2"
+OUTPUT_DIR = "./bert_output"
 ID2LABEL = {0: "False", 1: "True"}
 LABEL2ID = {v: k for k, v in ID2LABEL.items()}
-OUTPUT_DIR = "./bert_output"
+INPUT_DATA_PATH = "./data/input_data"
 
 
 class BertClassifierPipeline:
     def __init__(
         self,
         model_name: str = MODEL_NAME,
-        id2label: dict = None,
+        id2label: dict = ID2LABEL,
+        label2id: dict = LABEL2ID,
         output_dir: str = OUTPUT_DIR,
+        label_column: str = "label",
+        feature_column: str = "prompt",
     ):
         self.model_name = model_name
-        self.id2label = id2label if id2label is not None else ID2LABEL
-        self.label2id = {v: k for k, v in self.id2label.items()}
+        self.id2label = id2label
+        self.label2id = label2id
         self.output_dir = output_dir
+        self.label_column = label_column
+        self.feature_column = feature_column
 
         self.tokenizer, self.model = self.load_model(self.model_name)
         self.data_collator = DataCollatorWithPadding(tokenizer=self.tokenizer)
@@ -53,7 +60,6 @@ class BertClassifierPipeline:
                 param.requires_grad = False
             print(f"Parameter: {name}, Requires Grad: {param.requires_grad}")
 
-
     def compute_metrics(self, eval_pred):
         logits, labels = eval_pred
         predictions = np.argmax(logits, axis=-1)
@@ -61,14 +67,10 @@ class BertClassifierPipeline:
         accuracy = self.accuracy_metric.compute(
             predictions=predictions, references=labels
         )
-        f1 = self.f1_metric.compute(
-            predictions=predictions, references=labels, average="weighted"
-        )
-        recall = self.recall_metric.compute(
-            predictions=predictions, references=labels, average="weighted"
-        )
+        f1 = self.f1_metric.compute(predictions=predictions, references=labels)
+        recall = self.recall_metric.compute(predictions=predictions, references=labels)
         precision = self.precision_metric.compute(
-            predictions=predictions, references=labels, average="weighted"
+            predictions=predictions, references=labels
         )
         return {
             "accuracy": accuracy["accuracy"],
@@ -77,19 +79,22 @@ class BertClassifierPipeline:
             "precision": precision["precision"],
         }
 
-
     @staticmethod
     def load_data():
-        return datasets.from_json("input/data.json")
+        data = datasets.load_dataset(INPUT_DATA_PATH, split="train")
+        split_data = data.train_test_split(
+            test_size=0.1, stratify_by_column="label", seed=42
+        )
+        return split_data["train"], split_data["test"]
 
     @staticmethod
-    def normalize_data(data, prompt: str = "prompt"):
+    def normalize_data(data, prompt: str):
         data = list(data[prompt])
         return [" ".join(item.strip().lower().split()) for item in data]
 
     def validate_data(self, train_data, eval_data):
-        train_data = self.normalize_data(train_data)
-        eval_data = self.normalize_data(eval_data)
+        train_data = self.normalize_data(train_data, self.feature_column)
+        eval_data = self.normalize_data(eval_data, self.feature_column)
 
         U_train = set(train_data)
         U_eval = set(eval_data)
@@ -108,17 +113,12 @@ class BertClassifierPipeline:
         print(f"Duplicate samples in training data: {duplicate_train}")
         print(f"Duplicate samples in evaluation data: {duplicate_eval}")
 
-    def format_data(self, data, prompt: str = "prompt", labels: str = "label"):
-        data[prompt] = data.map(lambda x: self.normalize_data(x, prompt), batched=True)
-        data[labels] = [self.label2id[item] for item in data[labels]]
-        tokenized = self.tokenizer(
-            data, padding=True, truncation=True, return_tensors="pt"
-        )
+    def format_data(self, data):
+        tokenized = self.tokenizer(data[self.feature_column], truncation=True)
         data["input_ids"] = tokenized["input_ids"]
         data["attention_mask"] = tokenized["attention_mask"]
         data["token_type_ids"] = tokenized.get("token_type_ids", None)
         return data
-
 
     def train_model(self, data, eval_data):
         training_args = TrainingArguments(
@@ -140,7 +140,7 @@ class BertClassifierPipeline:
             compute_metrics=self.compute_metrics,
         )
 
-        return trainer.train()
+        return trainer
 
     def run(self):
         self.freeze_backbone()
@@ -151,15 +151,17 @@ class BertClassifierPipeline:
         )
         self.validate_data(train_data, eval_data)
 
-        train_data = train_data.map(lambda x: self.format_data(x))
-        eval_data = eval_data.map(lambda x: self.format_data(x))
-        training_result = self.train_model(train_data, eval_data)
+        train_data = train_data.map(self.format_data, batched=True)
+        eval_data = eval_data.map(self.format_data, batched=True)
+        trainer = self.train_model(train_data, eval_data)
+        training_result = trainer.train()
         print("Training completed.")
         print("Training metrics:", training_result.metrics)
+        print("Evaluation metrics:", trainer.evaluate())
 
 
 def main():
-    pipeline = BertClassifierPipeline()
+    pipeline = BertClassifierPipeline(label_column="label", feature_column="text")
     pipeline.run()
 
 
