@@ -1,8 +1,10 @@
 name: model-eval-and-promote
 
 on:
-  workflow_dispatch:
   pull_request:
+  push:
+    branches: [master]
+  workflow_dispatch:
 
 env:
   MIN_ACCURACY: "0.6"
@@ -11,24 +13,21 @@ env:
 
 jobs:
   eval:
+    if: github.event_name != 'push'
     runs-on: ubuntu-latest
     env:
       MODEL_REVISION: candidate
       HF_TOKEN: ${{ secrets.HF_TOKEN }}
     steps:
       - uses: actions/checkout@v4
-
       - uses: astral-sh/setup-uv@v5
         with:
           enable-cache: true
           cache-dependency-glob: uv.lock
-
       - name: Install dependencies
         run: uv sync --frozen
-
       - name: Run eval
-        run: uv run python ./CI/eval.py             
-
+        run: uv run python ./CI/eval.py
       - name: Publish metrics
         if: always()
         run: |
@@ -37,15 +36,14 @@ jobs:
             cat metrics.json >> "$GITHUB_STEP_SUMMARY"
             echo '```' >> "$GITHUB_STEP_SUMMARY"
           fi
-
       - uses: actions/upload-artifact@v4
         if: always()
         with:
           name: metrics
           path: metrics.json
+
   promote:
-    needs: eval
-    if: github.event_name == 'workflow_dispatch'
+    if: github.event_name == 'push'
     runs-on: ubuntu-latest
     environment: production
     env:
