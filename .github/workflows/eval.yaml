@@ -1,0 +1,63 @@
+name: model-eval-and-promote
+
+on:
+  workflow_dispatch:
+  pull_request:
+
+env:
+  MIN_ACCURACY: "0.6"
+  MODEL_PATH: ${{ secrets.HF_REPO }}
+  DATA_PATH: ${{ secrets.HF_REPO }}
+
+jobs:
+  eval:
+    runs-on: ubuntu-latest
+    env:
+      MODEL_REVISION: candidate
+      HF_TOKEN: ${{ secrets.HF_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+          cache-dependency-glob: uv.lock
+
+      - name: Install dependencies
+        run: uv sync --frozen
+
+      - name: Run eval
+        run: uv run python eval.py             
+
+      - name: Publish metrics
+        if: always()
+        run: |
+          if [ -f metrics.json ]; then
+            echo '```json' >> "$GITHUB_STEP_SUMMARY"
+            cat metrics.json >> "$GITHUB_STEP_SUMMARY"
+            echo '```' >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: metrics
+          path: metrics.json
+
+  # promote:
+  #   needs: eval                               
+  #   if: github.event_name == 'workflow_dispatch'
+  #   runs-on: ubuntu-latest
+  #   environment: production                    
+  #   env:
+  #     HF_TOKEN: ${{ secrets.HF_WRITE_TOKEN }}  
+  #   steps:
+  #     - uses: actions/checkout@v4
+
+  #     - uses: astral-sh/setup-uv@v5
+  #       with:
+  #         enable-cache: true
+  #         cache-dependency-glob: uv.lock
+
+  #     - run: uv sync --frozen
+  #     - run: uv run python promote.py

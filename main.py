@@ -1,3 +1,5 @@
+import torch
+import matplotlib.pyplot as plt
 import datasets
 import evaluate
 import numpy as np
@@ -11,7 +13,7 @@ from transformers import (
 )
 
 MODEL_NAME = "sentence-transformers/all-MiniLM-L6-v2"
-OUTPUT_DIR = "./bert_output"
+OUTPUT_DIR = "./bert_output_mini"
 ID2LABEL = {0: "False", 1: "True"}
 LABEL2ID = {v: k for k, v in ID2LABEL.items()}
 INPUT_DATA_PATH = "./data/input_data"
@@ -43,6 +45,8 @@ class BertClassifierPipeline:
         self.precision_metric = evaluate.load("precision")
 
     def load_model(self, model_name):
+        self.device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+
         tokenizer = AutoTokenizer.from_pretrained(model_name)
         model = AutoModelForSequenceClassification.from_pretrained(
             model_name,
@@ -50,6 +54,8 @@ class BertClassifierPipeline:
             id2label=self.id2label,
             label2id=self.label2id,
         )
+        model.to(self.device)
+
         return tokenizer, model
 
     def freeze_backbone(self):
@@ -59,6 +65,38 @@ class BertClassifierPipeline:
             else:
                 param.requires_grad = False
             print(f"Parameter: {name}, Requires Grad: {param.requires_grad}")
+
+    def plot_training(self, trainer, save_path="training_curves.png"):
+        history = trainer.state.log_history
+
+        train_steps = [h["step"] for h in history if "loss" in h]
+        train_loss = [h["loss"] for h in history if "loss" in h]
+
+        eval_epochs = [h["epoch"] for h in history if "eval_loss" in h]
+        eval_loss = [h["eval_loss"] for h in history if "eval_loss" in h]
+
+        fig, axes = plt.subplots(1, 2, figsize=(12, 4))
+
+        # Loss curves
+        axes[0].plot(train_steps, train_loss, label="Train loss")
+        axes[0].set_xlabel("Step")
+        axes[0].set_ylabel("Loss")
+        axes[0].set_title("Training loss")
+        axes[0].legend()
+
+        # Eval metrics per epoch
+        axes[1].plot(eval_epochs, eval_loss, marker="o", label="Eval loss")
+        for metric in ["accuracy", "f1", "recall", "precision"]:
+            values = [h[f"eval_{metric}"] for h in history if f"eval_{metric}" in h]
+            if values:
+                axes[1].plot(eval_epochs, values, marker="o", label=metric)
+        axes[1].set_xlabel("Epoch")
+        axes[1].set_title("Evaluation metrics")
+        axes[1].legend()
+
+        plt.tight_layout()
+        plt.savefig(save_path, dpi=150)
+        plt.show()
 
     def compute_metrics(self, eval_pred):
         logits, labels = eval_pred
@@ -125,9 +163,12 @@ class BertClassifierPipeline:
             output_dir=self.output_dir,
             per_device_train_batch_size=16,
             per_device_eval_batch_size=16,
-            learning_rate=2e-5,
-            num_train_epochs=3,
+            learning_rate=1e-3,
+            num_train_epochs=15,
             save_strategy="epoch",
+            eval_strategy="epoch",
+            logging_strategy="steps",
+            logging_steps=10,
         )
 
         trainer = Trainer(
@@ -157,7 +198,11 @@ class BertClassifierPipeline:
         training_result = trainer.train()
         print("Training completed.")
         print("Training metrics:", training_result.metrics)
+        self.plot_training(trainer)
         print("Evaluation metrics:", trainer.evaluate())
+
+        trainer.save_model("output_model_mini")
+        # trainer.tokenizer.save_pretrained("output_model")
 
 
 def main():
