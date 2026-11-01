@@ -43,14 +43,14 @@ jobs:
         with:
           name: metrics
           path: metrics.json
-promote:
-  needs: eval
-  if: github.event_name == 'workflow_dispatch'
-  runs-on: ubuntu-latest
-  environment: production
-  env:
-    HF_TOKEN: ${{ secrets.HF_WRITE_TOKEN }}
-  steps:
-    - uses: actions/checkout@v4
-    - uses: astral-sh/setup-uv@v5
-    - run: uv run --no-project --with huggingface_hub python ./CI/promote.py
+  promote:
+    needs: eval
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    environment: production
+    env:
+      HF_TOKEN: ${{ secrets.HF_WRITE_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+      - run: uv run --no-project --with huggingface_hub python ./CI/promote.py
