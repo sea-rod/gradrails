@@ -7,6 +7,7 @@ on:
 env:
   MIN_ACCURACY: "0.6"
   MODEL_PATH: ${{ secrets.HF_REPO }}
+  DATA_PATH: ${{ secrets.HF_REPO }}
 
 jobs:
   eval:
