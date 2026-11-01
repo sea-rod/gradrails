@@ -9,4 +9,7 @@ wheels/
 # Virtual environments
 .venv
 data
-bert_output
+bert_*
+output_*
+*.png
+*.json
