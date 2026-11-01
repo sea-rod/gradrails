@@ -10,6 +10,6 @@ wheels/
 .venv
 data
 bert_*
-output_*
+output*
 *.png
 *.json

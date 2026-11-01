@@ -161,6 +161,7 @@ class BertClassifierPipeline:
     def train_model(self, data, eval_data):
         training_args = TrainingArguments(
             output_dir=self.output_dir,
+            hub_model_id="sea-rod/gaurdrails-miniLM-L6-V2",
             per_device_train_batch_size=16,
             per_device_eval_batch_size=16,
             learning_rate=1e-3,
@@ -201,8 +202,7 @@ class BertClassifierPipeline:
         self.plot_training(trainer)
         print("Evaluation metrics:", trainer.evaluate())
 
-        trainer.save_model("output_model_mini")
-        # trainer.tokenizer.save_pretrained("output_model")
+        trainer.save_model("./output/gaurdrails-miniLM-L6-V2")
 
 
 def main():
