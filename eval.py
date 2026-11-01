@@ -6,8 +6,8 @@ import evaluate
 from datasets import load_dataset
 from transformers import pipeline
 
-MODEL_PATH = os.environ.get("HF_REPO", "output_model_mini")
-DATA_PATH = os.environ.get("HF_REPO", "./data/input_data")
+MODEL_PATH = os.environ.get("MODEL_PATH", "output_model_mini")
+DATA_PATH = os.environ.get("DATA_PATH", "./data/input_data")
 MIN_ACCURACY = float(os.environ.get("MIN_ACCURACY",0.6))
 
 ID2LABEL = {0: "False", 1: "True"}
