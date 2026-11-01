@@ -27,7 +27,7 @@ jobs:
         run: uv sync --frozen
 
       - name: Run eval
-        run: uv run python eval.py             
+        run: uv run python ./CI/eval.py             
 
       - name: Publish metrics
         if: always()
@@ -43,21 +43,14 @@ jobs:
         with:
           name: metrics
           path: metrics.json
-
-  # promote:
-  #   needs: eval                               
-  #   if: github.event_name == 'workflow_dispatch'
-  #   runs-on: ubuntu-latest
-  #   environment: production                    
-  #   env:
-  #     HF_TOKEN: ${{ secrets.HF_WRITE_TOKEN }}  
-  #   steps:
-  #     - uses: actions/checkout@v4
-
-  #     - uses: astral-sh/setup-uv@v5
-  #       with:
-  #         enable-cache: true
-  #         cache-dependency-glob: uv.lock
-
-  #     - run: uv sync --frozen
-  #     - run: uv run python promote.py
+  promote:
+    needs: eval
+    if: github.event_name == 'workflow_dispatch'
+    runs-on: ubuntu-latest
+    environment: production
+    env:
+      HF_TOKEN: ${{ secrets.HF_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+      - run: uv run --no-project --with huggingface_hub python ./CI/promote.py

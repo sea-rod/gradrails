@@ -24,7 +24,7 @@ def compute_metrics(labels, predictions):
 
 def main():
     test_data = load_dataset(DATA_PATH, split="test")
-    pipe = pipeline("text-classification", MODEL_PATH, tokenizer=MODEL_PATH)
+    pipe = pipeline("text-classification", MODEL_PATH, tokenizer=MODEL_PATH,revision="dev")
 
     result = pipe(list(test_data["text"]), truncation=True)
     preds = [LABEL2ID[r["label"]] for r in result]
